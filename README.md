@@ -368,6 +368,9 @@ Anchoring today is a local hash-chained log, not yet a public/permissioned chain
 - [ ] Compliance dashboard
 - [ ] Additional connectors (webhook/event ingest, file/object storage)
 
+
+<img width="979" height="499" alt="image" src="https://github.com/user-attachments/assets/454be779-3192-46b8-9128-ec734655e295" />
+
 ---
 
 ## License
