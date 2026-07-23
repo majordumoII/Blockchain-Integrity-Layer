@@ -1,0 +1,96 @@
+//! The core loop: pull records from a [`RecordSource`], hash + sign them
+//! via `proof-core`, submit the resulting [`Proof`] to a [`ProofSink`],
+//! then acknowledge the source — in that order, so a crash before the
+//! sink accepts a proof leaves the source able to redeliver it (see
+//! `proof_connectors::AckToken`'s docs for why ack ordering matters).
+
+use crate::metrics;
+use proof_connectors::{ProofSink, ProvedRecord, RecordSource, SourceId};
+use proof_core::ProofBuilder;
+use proof_core::hash::{self, HashAlgorithm};
+use proof_core::sign::SigningPrivateKey;
+use std::sync::Arc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use tracing::{error, info, warn};
+
+/// Runs the observe → hash → sign → submit → acknowledge loop forever
+/// (until the source errors out, which callers should treat as this
+/// connector needing a restart/backoff, not the whole service exiting).
+///
+/// `signing_key` attests every proof this pipeline produces — see
+/// `main.rs` for why a single freshly generated key is the deliberate
+/// choice for this stage rather than a persisted/rotated one.
+///
+/// # Panics
+///
+/// Panics if the system clock reports a time before the Unix epoch.
+pub async fn run(
+    mut source: impl RecordSource,
+    sink: Arc<dyn ProofSink>,
+    signing_key: Arc<SigningPrivateKey>,
+    source_id: SourceId,
+) {
+    loop {
+        let started_at = Instant::now();
+        let (record, ack) = match source.next().await {
+            Ok(pair) => pair,
+            Err(e) => {
+                error!(source = %source_id, error = %e, "record source failed; stopping this pipeline");
+                metrics::record_failed(&source_id, "source");
+                return;
+            }
+        };
+
+        let table = record
+            .metadata_value("table")
+            .unwrap_or("unknown")
+            .to_string();
+        metrics::record_observed(&source_id, &table);
+
+        let digest = hash::hash(HashAlgorithm::Blake3, &record.bytes);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before 1970")
+            .as_secs();
+
+        let mut builder =
+            ProofBuilder::new(digest, timestamp).attest(source_id.as_str(), &signing_key);
+        for (key, value) in &record.metadata {
+            builder = builder.metadata(key.clone(), value.clone());
+        }
+        let proof = match builder.build() {
+            Ok(p) => p,
+            Err(e) => {
+                // Cannot happen in practice (we always attest at least
+                // once above), but if it ever did, this record must not
+                // be acknowledged — better to redeliver it forever than
+                // silently drop it.
+                error!(source = %source_id, error = %e, "failed to build proof; record will be redelivered");
+                metrics::record_failed(&source_id, "build");
+                continue;
+            }
+        };
+
+        let proved = ProvedRecord {
+            source_id: source_id.clone(),
+            source_position: record.source_position.clone(),
+            proof,
+        };
+        if let Err(e) = sink.submit(proved).await {
+            error!(source = %source_id, error = %e, "sink rejected proof; record will be redelivered");
+            metrics::record_failed(&source_id, "sink");
+            continue;
+        }
+
+        // Only acknowledge after the sink has durably accepted the proof
+        // — this is the ordering `AckToken`'s contract depends on.
+        if let Err(e) = ack.ack().await {
+            warn!(source = %source_id, error = %e, "failed to acknowledge source; record may be redelivered");
+            metrics::record_failed(&source_id, "ack");
+            continue;
+        }
+
+        metrics::record_proved(&source_id, &table, started_at);
+        info!(source = %source_id, table = %table, position = %record.source_position, "proved record");
+    }
+}

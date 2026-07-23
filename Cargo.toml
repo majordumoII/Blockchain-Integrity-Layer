@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/proof-core", "crates/proof-connectors", "crates/connector-postgres"]
+members = [
+    "crates/proof-core",
+    "crates/proof-connectors",
+    "crates/connector-postgres",
+    "crates/proof-service",
+]
 
 [workspace.package]
 version = "0.1.0"

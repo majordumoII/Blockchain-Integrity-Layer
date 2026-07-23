@@ -1,0 +1,28 @@
+[package]
+name = "proof-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Single-binary service wiring a connector into proof-core and a ProofSink, exposing a live UI and Prometheus metrics"
+
+[dependencies]
+proof-core = { path = "../proof-core" }
+proof-connectors = { path = "../proof-connectors" }
+connector-postgres = { path = "../connector-postgres" }
+axum = { version = "0.8" }
+askama = "0.16"
+tokio = { workspace = true, features = ["full"] }
+async-trait.workspace = true
+serde.workspace = true
+rand_core = { workspace = true }
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive", "env"] }
+futures-util = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
