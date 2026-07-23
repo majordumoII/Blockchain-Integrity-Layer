@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/proof-core"]
+members = ["crates/proof-core", "crates/proof-connectors", "crates/connector-postgres"]
 
 [workspace.package]
 version = "0.1.0"
@@ -20,6 +20,8 @@ thiserror = "2"
 zeroize = { version = "1", features = ["derive"] }
 subtle = "2"
 proptest = "1"
+tokio = "1"
+async-trait = "0.1"
 
 [profile.release]
 lto = true

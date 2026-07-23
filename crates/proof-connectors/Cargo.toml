@@ -1,0 +1,18 @@
+[package]
+name = "proof-connectors"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Industry-agnostic connector traits (RecordSource, ProofSink) that feed external data changes into proof-core"
+
+[dependencies]
+proof-core = { path = "../proof-core" }
+async-trait.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+thiserror.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+rand_core.workspace = true

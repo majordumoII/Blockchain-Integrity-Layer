@@ -280,14 +280,27 @@ Think of it like Nginx, Redis, or Postgres — a **lightweight, trusted service*
 
 ## Quick Start
 
-```bash
-# Build and run
-cargo run
-# → Hello from blockchain-integrity-layer!
+This is a Cargo **workspace**. From the repo root:
 
-# Build for release
-cargo build --release
+```bash
+# Build every crate
+cargo build --workspace
+
+# Run the proof-core demo: hashes a file, signs it, builds a proof,
+# verifies it, then shows tamper detection and forged-signer detection
+cargo run -p proof-core --example demo -- README.md
+
+# Run the full test suite
+cargo test --workspace
+
+# Release build (LTO, panic=abort, stripped)
+cargo build --workspace --release
 ```
+
+`connector-postgres` also has live integration tests that exercise a real Postgres logical
+replication stream end to end; they require a local Postgres instance with `wal_level = logical`
+and are skipped (not failed) if one isn't reachable. See that crate's `tests/*_live.rs` files for
+the one-time `docker run` / table / publication / slot setup.
 
 ---
 
@@ -295,27 +308,42 @@ cargo build --release
 
 ```
 .
-├── Cargo.toml          # Rust package config
-├── src/
-│   └── main.rs         # Entry point
-├── README.md           # This file
-└── .gitignore          # VCS ignore rules
+├── Cargo.toml                        # Workspace manifest
+├── crates/
+│   ├── proof-core/                   # Hashing, signing, canonical Proof/ProofBuilder
+│   ├── proof-connectors/             # RecordSource / ProofSink traits (industry-agnostic)
+│   └── connector-postgres/           # RecordSource impl: Postgres logical replication (CDC)
+├── README.md                         # This file
+├── README.original.md                # Earlier brainstorm draft, kept for reference
+├── CLAUDE.md                         # Guidance for AI coding agents working in this repo
+├── Phase1.md                         # Phase 1 build notes (proof-core)
+├── Instructions.md                   # How to see proof-core work end to end
+└── .gitignore                        # VCS ignore rules
 ```
 
 ---
 
 ## Project Status
 
-**v0.1.0** — Initial scaffolding. Proof-of-concept phase.
+**v0.1.0** — Core proof generation and first data-source connector built and verified against a
+real database. Pre-anchoring: proofs are generated and verified in-process; nothing is yet written
+to a chain.
 
-- [x] Rust project initialized (`cargo run` — works)
-- [ ] Core proof generation engine
-- [ ] Verification API
+- [x] Cargo workspace scaffolded
+- [x] Core proof generation engine (`proof-core`): algorithm-agnostic hashing (BLAKE3/SHA-256),
+      signing (Ed25519/ECDSA P-256), canonical versioned `Proof` format, multi-party attestation
+- [x] Connector abstraction (`proof-connectors`): `RecordSource` (industry-agnostic input) and
+      `ProofSink` (broadcast + history, for the live UI feed / metrics / future anchoring to share)
+- [x] First real connector (`connector-postgres`): hand-rolled Postgres logical replication client
+      (no third-party replication crate — verified against a live Postgres 16 instance) that turns
+      `INSERT`/`UPDATE`/`DELETE` row changes into provable records with zero source-side code changes
+- [ ] `proof-service`: single binary wiring a connector → `proof-core` → `ProofSink`, exposing
+      Prometheus `/metrics` and a live-activity UI
 - [ ] Blockchain anchoring (testnet)
-- [ ] SDK (Rust crate)
-- [ ] CLI tooling
+- [ ] Verification API
+- [ ] SDK (Rust crate) / CLI tooling
 - [ ] Compliance dashboard
-- [ ] Multi-party signature support
+- [ ] Additional connectors (webhook/event ingest, file/object storage)
 
 ---
 
