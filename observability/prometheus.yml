@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: proof-service
+    static_configs:
+      # host.docker.internal resolves to the Docker host from inside a
+      # container on Docker Desktop (macOS/Windows) and is added
+      # explicitly for Linux below via extra_hosts in docker-compose.yml.
+      # proof-service itself is expected to run on the host during
+      # development (`cargo run -p proof-service`), not inside this
+      # compose stack, since it also needs a route to Postgres.
+      - targets: ["host.docker.internal:9090"]

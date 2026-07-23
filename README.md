@@ -297,6 +297,21 @@ cargo test --workspace
 cargo build --workspace --release
 ```
 
+To see the whole system running live (connector → proof-core → live UI → metrics → dashboard):
+
+```bash
+# 1. Start a local Postgres with logical replication (see connector-postgres's
+#    tests/*_live.rs for the one-time table/publication/slot setup)
+
+# 2. Start proof-service, pointed at it
+BIL_PG_PASSWORD=... BIL_PG_DBNAME=... cargo run -p proof-service
+# → live UI at http://localhost:8080, Prometheus metrics at :9090/metrics
+
+# 3. Start the Prometheus + Grafana stack
+cd observability && docker compose up -d
+# → Grafana at http://localhost:3000 (admin/admin), dashboard auto-provisioned
+```
+
 `connector-postgres` also has live integration tests that exercise a real Postgres logical
 replication stream end to end; they require a local Postgres instance with `wal_level = logical`
 and are skipped (not failed) if one isn't reachable. See that crate's `tests/*_live.rs` files for
@@ -312,7 +327,9 @@ the one-time `docker run` / table / publication / slot setup.
 ├── crates/
 │   ├── proof-core/                   # Hashing, signing, canonical Proof/ProofBuilder
 │   ├── proof-connectors/             # RecordSource / ProofSink traits (industry-agnostic)
-│   └── connector-postgres/           # RecordSource impl: Postgres logical replication (CDC)
+│   ├── connector-postgres/           # RecordSource impl: Postgres logical replication (CDC)
+│   └── proof-service/                # Binary: connector → proof-core → ProofSink, UI + metrics
+├── observability/                    # Prometheus + Grafana (dashboard-as-code via docker-compose)
 ├── README.md                         # This file
 ├── Phase1.md                         # Phase 1 build notes (proof-core)
 ├── Instructions.md                   # How to see proof-core work end to end
@@ -323,9 +340,9 @@ the one-time `docker run` / table / publication / slot setup.
 
 ## Project Status
 
-**v0.1.0** — Core proof generation and first data-source connector built and verified against a
-real database. Pre-anchoring: proofs are generated and verified in-process; nothing is yet written
-to a chain.
+**v0.1.0** — Core proof generation, a live data-source connector, and a running service with
+observability, all verified end-to-end against a real database. Pre-anchoring: proofs are
+generated and verified in-process; nothing is yet written to a chain.
 
 - [x] Cargo workspace scaffolded
 - [x] Core proof generation engine (`proof-core`): algorithm-agnostic hashing (BLAKE3/SHA-256),
@@ -335,8 +352,10 @@ to a chain.
 - [x] First real connector (`connector-postgres`): hand-rolled Postgres logical replication client
       (no third-party replication crate — verified against a live Postgres 16 instance) that turns
       `INSERT`/`UPDATE`/`DELETE` row changes into provable records with zero source-side code changes
-- [ ] `proof-service`: single binary wiring a connector → `proof-core` → `ProofSink`, exposing
-      Prometheus `/metrics` and a live-activity UI
+- [x] `proof-service`: single binary wiring the connector → `proof-core` → `ProofSink`, serving a
+      live-activity UI (server-rendered HTML + htmx/SSE) and Prometheus `/metrics`
+- [x] Observability: Prometheus + Grafana via `docker-compose`, with the dashboard provisioned as
+      code (`observability/grafana/dashboards/proof-service.json`) — no manual dashboard clicking
 - [ ] Blockchain anchoring (testnet)
 - [ ] Verification API
 - [ ] SDK (Rust crate) / CLI tooling

@@ -1,0 +1,105 @@
+{
+  "title": "Blockchain Integrity Layer — proof-service",
+  "uid": "bil-proof-service",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Records observed / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (source_id, table) (rate(bil_records_observed_total[1m]))",
+          "legendFormat": "{{source_id}} / {{table}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "title": "Proofs generated / sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (source_id, table) (rate(bil_proofs_generated_total[1m]))",
+          "legendFormat": "{{source_id}} / {{table}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "title": "Total proofs generated",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(bil_proofs_generated_total)",
+          "legendFormat": "proofs"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Total records observed",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(bil_records_observed_total)",
+          "legendFormat": "records"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Failed records (by stage)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (stage) (bil_records_failed_total)",
+          "legendFormat": "{{stage}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "Proof pipeline latency (observe → hash → sign → submit → ack)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "expr": "bil_proof_pipeline_seconds{quantile=\"0.5\"}",
+          "legendFormat": "p50 {{source_id}}/{{table}}"
+        },
+        {
+          "expr": "bil_proof_pipeline_seconds{quantile=\"0.95\"}",
+          "legendFormat": "p95 {{source_id}}/{{table}}"
+        },
+        {
+          "expr": "bil_proof_pipeline_seconds{quantile=\"0.99\"}",
+          "legendFormat": "p99 {{source_id}}/{{table}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    }
+  ]
+}
