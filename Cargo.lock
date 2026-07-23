@@ -1330,6 +1330,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "proof-anchor"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "proof-core",
+ "rand_core 0.6.4",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "proof-connectors"
 version = "0.1.0"
 dependencies = [
@@ -1370,6 +1384,7 @@ dependencies = [
  "futures-util",
  "metrics",
  "metrics-exporter-prometheus",
+ "proof-anchor",
  "proof-connectors",
  "proof-core",
  "rand_core 0.6.4",

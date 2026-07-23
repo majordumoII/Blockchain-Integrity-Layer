@@ -9,10 +9,12 @@
 use clap::Parser;
 use connector_postgres::PostgresSource;
 use connector_postgres::connection::{ConnectionConfig, RawConnection};
+use proof_anchor::{LocalLogAnchor, ProofAnchor};
 use proof_connectors::{InProcessProofSink, ProofSink, SourceId};
 use proof_core::sign::{SignatureAlgorithm, SigningPrivateKey};
 use rand_core::OsRng;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
 
@@ -60,6 +62,13 @@ struct Args {
     /// Address the Prometheus `/metrics` endpoint listens on.
     #[arg(long, env = "BIL_METRICS_ADDR", default_value = "127.0.0.1:9090")]
     metrics_addr: SocketAddr,
+
+    /// Path to the local hash-chained anchor log. See `proof-anchor`'s
+    /// `LocalLogAnchor` — this is the first anchoring backend, standing
+    /// in for a future chain-backed one behind the same `ProofAnchor`
+    /// trait.
+    #[arg(long, env = "BIL_ANCHOR_LOG_PATH", default_value = "./anchor.log")]
+    anchor_log_path: PathBuf,
 }
 
 #[tokio::main]
@@ -107,9 +116,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sink = Arc::new(InProcessProofSink::new(200, 64));
     let sink_dyn: Arc<dyn ProofSink> = sink.clone();
 
+    let anchor = Arc::new(LocalLogAnchor::open(&args.anchor_log_path)?);
+    info!(
+        ledger = %anchor.ledger_id(),
+        "anchoring proofs to a local hash-chained log"
+    );
+    let anchor_dyn: Arc<dyn ProofAnchor> = anchor;
+
     tokio::spawn(proof_service::pipeline::run(
         source,
         sink_dyn,
+        anchor_dyn,
         signing_key,
         source_id,
     ));

@@ -5,6 +5,7 @@ members = [
     "crates/proof-connectors",
     "crates/connector-postgres",
     "crates/proof-service",
+    "crates/proof-anchor",
 ]
 
 [workspace.package]

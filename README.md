@@ -328,10 +328,12 @@ the one-time `docker run` / table / publication / slot setup.
 │   ├── proof-core/                   # Hashing, signing, canonical Proof/ProofBuilder
 │   ├── proof-connectors/             # RecordSource / ProofSink traits (industry-agnostic)
 │   ├── connector-postgres/           # RecordSource impl: Postgres logical replication (CDC)
-│   └── proof-service/                # Binary: connector → proof-core → ProofSink, UI + metrics
+│   ├── proof-anchor/                 # ProofAnchor trait + LocalLogAnchor (hash-chained log)
+│   └── proof-service/                # Binary: connector → proof-core → ProofSink/anchor, UI + metrics
 ├── observability/                    # Prometheus + Grafana (dashboard-as-code via docker-compose)
 ├── README.md                         # This file
 ├── Phase1.md                         # Phase 1 build notes (proof-core)
+├── Observability.md                  # proof-service + Prometheus/Grafana build notes
 ├── Instructions.md                   # How to see proof-core work end to end
 └── .gitignore                        # VCS ignore rules
 ```
@@ -340,23 +342,27 @@ the one-time `docker run` / table / publication / slot setup.
 
 ## Project Status
 
-**v0.1.0** — Core proof generation, a live data-source connector, and a running service with
-observability, all verified end-to-end against a real database. Pre-anchoring: proofs are
-generated and verified in-process; nothing is yet written to a chain.
+**v0.1.0** — Core proof generation, a live data-source connector, a running service with
+observability, and tamper-evident anchoring, all verified end-to-end against a real database.
+Anchoring today is a local hash-chained log, not yet a public/permissioned chain — see
+`proof-anchor`'s design below for why that's the deliberate first step.
 
 - [x] Cargo workspace scaffolded
 - [x] Core proof generation engine (`proof-core`): algorithm-agnostic hashing (BLAKE3/SHA-256),
       signing (Ed25519/ECDSA P-256), canonical versioned `Proof` format, multi-party attestation
 - [x] Connector abstraction (`proof-connectors`): `RecordSource` (industry-agnostic input) and
-      `ProofSink` (broadcast + history, for the live UI feed / metrics / future anchoring to share)
+      `ProofSink` (broadcast + history, for the live UI feed / metrics / anchoring to share)
 - [x] First real connector (`connector-postgres`): hand-rolled Postgres logical replication client
       (no third-party replication crate — verified against a live Postgres 16 instance) that turns
       `INSERT`/`UPDATE`/`DELETE` row changes into provable records with zero source-side code changes
-- [x] `proof-service`: single binary wiring the connector → `proof-core` → `ProofSink`, serving a
-      live-activity UI (server-rendered HTML + htmx/SSE) and Prometheus `/metrics`
+- [x] `proof-service`: single binary wiring the connector → `proof-core` → `ProofSink` + anchor,
+      serving a live-activity UI (server-rendered HTML + htmx/SSE) and Prometheus `/metrics`
 - [x] Observability: Prometheus + Grafana via `docker-compose`, with the dashboard provisioned as
       code (`observability/grafana/dashboards/proof-service.json`) — no manual dashboard clicking
-- [ ] Blockchain anchoring (testnet)
+- [x] Anchoring (`proof-anchor`): chain-agnostic `ProofAnchor` trait + `LocalLogAnchor`, a hash-chained
+      append-only local log giving genuine tamper-evidence without a network/consensus dependency —
+      proves out the anchoring boundary before committing to any specific chain's SDK/wallet/fees
+- [ ] Chain-backed anchor implementation (testnet)
 - [ ] Verification API
 - [ ] SDK (Rust crate) / CLI tooling
 - [ ] Compliance dashboard

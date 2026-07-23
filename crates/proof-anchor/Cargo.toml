@@ -1,0 +1,20 @@
+[package]
+name = "proof-anchor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Chain-agnostic anchoring trait for committing proof-core Proofs to a tamper-evident ledger"
+
+[dependencies]
+proof-core = { path = "../proof-core" }
+async-trait.workspace = true
+serde.workspace = true
+bincode.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile = "3"
+rand_core.workspace = true

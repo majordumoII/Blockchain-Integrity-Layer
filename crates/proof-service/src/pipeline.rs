@@ -1,10 +1,13 @@
 //! The core loop: pull records from a [`RecordSource`], hash + sign them
 //! via `proof-core`, submit the resulting [`Proof`] to a [`ProofSink`],
-//! then acknowledge the source — in that order, so a crash before the
-//! sink accepts a proof leaves the source able to redeliver it (see
-//! `proof_connectors::AckToken`'s docs for why ack ordering matters).
+//! anchor it to a tamper-evident ledger, then acknowledge the source — in
+//! that order, so a crash before any of those three steps succeeds leaves
+//! the source able to redeliver the record rather than silently treating
+//! it as durably proved when it isn't yet (see `proof_connectors::AckToken`'s
+//! docs for why ack ordering matters).
 
 use crate::metrics;
+use proof_anchor::ProofAnchor;
 use proof_connectors::{ProofSink, ProvedRecord, RecordSource, SourceId};
 use proof_core::ProofBuilder;
 use proof_core::hash::{self, HashAlgorithm};
@@ -13,9 +16,10 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
 
-/// Runs the observe → hash → sign → submit → acknowledge loop forever
-/// (until the source errors out, which callers should treat as this
-/// connector needing a restart/backoff, not the whole service exiting).
+/// Runs the observe → hash → sign → submit → anchor → acknowledge loop
+/// forever (until the source errors out, which callers should treat as
+/// this connector needing a restart/backoff, not the whole service
+/// exiting).
 ///
 /// `signing_key` attests every proof this pipeline produces — see
 /// `main.rs` for why a single freshly generated key is the deliberate
@@ -27,6 +31,7 @@ use tracing::{error, info, warn};
 pub async fn run(
     mut source: impl RecordSource,
     sink: Arc<dyn ProofSink>,
+    anchor: Arc<dyn ProofAnchor>,
     signing_key: Arc<SigningPrivateKey>,
     source_id: SourceId,
 ) {
@@ -74,7 +79,7 @@ pub async fn run(
         let proved = ProvedRecord {
             source_id: source_id.clone(),
             source_position: record.source_position.clone(),
-            proof,
+            proof: proof.clone(),
         };
         if let Err(e) = sink.submit(proved).await {
             error!(source = %source_id, error = %e, "sink rejected proof; record will be redelivered");
@@ -82,8 +87,22 @@ pub async fn run(
             continue;
         }
 
+        // Anchoring is this project's actual durability guarantee, so it
+        // gates the ack exactly like the sink submit above: a crash
+        // before it succeeds must leave the record redeliverable rather
+        // than silently ending up "acked but never anchored."
+        let receipt = match anchor.anchor(&proof).await {
+            Ok(r) => r,
+            Err(e) => {
+                error!(source = %source_id, error = %e, "anchoring failed; record will be redelivered");
+                metrics::record_failed(&source_id, "anchor");
+                continue;
+            }
+        };
+
         // Only acknowledge after the sink has durably accepted the proof
-        // — this is the ordering `AckToken`'s contract depends on.
+        // and it has been anchored — this is the ordering `AckToken`'s
+        // contract depends on.
         if let Err(e) = ack.ack().await {
             warn!(source = %source_id, error = %e, "failed to acknowledge source; record may be redelivered");
             metrics::record_failed(&source_id, "ack");
@@ -91,6 +110,12 @@ pub async fn run(
         }
 
         metrics::record_proved(&source_id, &table, started_at);
-        info!(source = %source_id, table = %table, position = %record.source_position, "proved record");
+        info!(
+            source = %source_id,
+            table = %table,
+            position = %record.source_position,
+            receipt = %receipt,
+            "proved and anchored record"
+        );
     }
 }
