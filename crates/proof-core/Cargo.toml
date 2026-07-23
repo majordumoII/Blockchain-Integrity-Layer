@@ -1,0 +1,22 @@
+[package]
+name = "proof-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Algorithm-agnostic proof generation, hashing, and signing primitives for the Blockchain Integrity Layer"
+
+[dependencies]
+blake3.workspace = true
+sha2.workspace = true
+ed25519-dalek.workspace = true
+p256.workspace = true
+rand_core.workspace = true
+serde.workspace = true
+bincode.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+subtle.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
