@@ -13,8 +13,12 @@ serde.workspace = true
 bincode.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "sync"] }
+alloy = { version = "2.2.0", features = ["full"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 tempfile = "3"
 rand_core.workspace = true
+alloy = { version = "2.2.0", features = ["full", "node-bindings"] }
+serde_json = "1.0.151"
+which = "8.0.5"

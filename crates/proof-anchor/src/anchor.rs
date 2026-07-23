@@ -78,9 +78,18 @@ pub enum AnchorError {
 /// Implementations decide their own notion of "position" and "ledger
 /// identity" — see [`AnchorReceipt`] — but must uphold one invariant:
 /// once [`Self::anchor`] returns a receipt, [`Self::verify`] against that
-/// receipt must keep returning the same `Proof` for as long as the
+/// receipt must keep confirming the same `Proof` for as long as the
 /// underlying ledger exists, and must detect (not silently ignore) any
 /// tampering with that entry or anything the chain depends on before it.
+///
+/// `verify` takes the `Proof` being checked as an argument rather than
+/// reconstructing one from ledger data, because not every backend stores
+/// enough to reconstruct it: an on-chain anchor should only ever commit a
+/// [`Proof`]'s 32-byte digest (matching the README's "the blockchain
+/// never stores raw content" stance), so it has nothing to rebuild a full
+/// `Proof` from. Re-deriving trust by re-hashing the caller-supplied
+/// proof and checking it against what the ledger actually committed
+/// mirrors `proof_core::hash::verify`'s digest/data split.
 #[async_trait::async_trait]
 pub trait ProofAnchor: Send + Sync {
     /// A stable identifier for this anchor instance, echoed into every
@@ -97,14 +106,16 @@ pub trait ProofAnchor: Send + Sync {
     /// underlying ledger write fails.
     async fn anchor(&self, proof: &Proof) -> Result<AnchorReceipt, AnchorError>;
 
-    /// Retrieves and verifies the proof at `receipt`'s position,
-    /// checking the ledger's tamper-evidence chain up to that point.
+    /// Confirms that `proof` is the exact proof committed at `receipt`'s
+    /// position, checking the ledger's tamper-evidence chain up to that
+    /// point.
     ///
     /// # Errors
     ///
     /// Returns [`AnchorError::WrongLedger`] if `receipt` names a
     /// different ledger, [`AnchorError::NotFound`] if no entry exists at
     /// its position, or [`AnchorError::IntegrityViolation`] if the chain
-    /// leading to that position has been tampered with.
-    async fn verify(&self, receipt: &AnchorReceipt) -> Result<Proof, AnchorError>;
+    /// leading to that position has been tampered with, or if `proof`
+    /// does not match what was actually anchored there.
+    async fn verify(&self, receipt: &AnchorReceipt, proof: &Proof) -> Result<(), AnchorError>;
 }

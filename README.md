@@ -317,6 +317,41 @@ replication stream end to end; they require a local Postgres instance with `wal_
 and are skipped (not failed) if one isn't reachable. See that crate's `tests/*_live.rs` files for
 the one-time `docker run` / table / publication / slot setup.
 
+### Anchoring to a real EVM chain
+
+By default `proof-service` anchors to `LocalLogAnchor` (a local hash-chained file). To anchor to a
+real chain instead, via `EvmAnchor` and the checked-in `solidity/src/ProofAnchor.sol` contract:
+
+```bash
+# 1. (One-time) install Foundry if you don't have it, and compile the contract
+brew install foundry
+cd solidity && forge build && cd ..
+
+# 2. Deploy the contract to any EVM JSON-RPC endpoint — a local Anvil node for
+#    testing, or a real testnet like Base Sepolia
+anvil   # in a separate terminal, for local testing
+
+BIL_EVM_RPC_URL=http://localhost:8545 \
+BIL_EVM_DEPLOYER_PRIVATE_KEY=<funded-account-private-key> \
+  cargo run -p proof-anchor --example deploy_evm_anchor
+# → prints the deployed contract address
+
+# 3. Point proof-service at it
+BIL_PG_PASSWORD=... BIL_PG_DBNAME=... \
+BIL_ANCHOR_BACKEND=evm \
+BIL_EVM_RPC_URL=http://localhost:8545 \
+BIL_EVM_PRIVATE_KEY=<anchoring-account-private-key> \
+BIL_EVM_CONTRACT_ADDRESS=<address-from-step-2> \
+  cargo run -p proof-service
+```
+
+Only a proof's 32-byte digest is ever sent on-chain (via the contract's `anchor(bytes32)` function
+and `ProofAnchored` event) — never raw record data or even the full `Proof` structure, matching
+this project's "the blockchain never stores raw content" stance. `EvmAnchor` has no chain-specific
+logic; the same code works against any EVM-compatible network, testnet or mainnet, public or
+permissioned. `proof-anchor`'s `tests/evm_live.rs` exercises this against a real local Anvil node
+(skipped, not failed, if `anvil` isn't on `PATH`) — see that crate's docs for details.
+
 ---
 
 ## Project Structure
@@ -328,10 +363,12 @@ the one-time `docker run` / table / publication / slot setup.
 │   ├── proof-core/                   # Hashing, signing, canonical Proof/ProofBuilder
 │   ├── proof-connectors/             # RecordSource / ProofSink traits (industry-agnostic)
 │   ├── connector-postgres/           # RecordSource impl: Postgres logical replication (CDC)
-│   ├── proof-anchor/                 # ProofAnchor trait + LocalLogAnchor (hash-chained log)
+│   ├── proof-anchor/                 # ProofAnchor trait + LocalLogAnchor + EvmAnchor
 │   └── proof-service/                # Binary: connector → proof-core → ProofSink/anchor, UI + metrics
+├── solidity/                         # ProofAnchor.sol (the EvmAnchor contract) + Foundry config
 ├── observability/                    # Prometheus + Grafana (dashboard-as-code via docker-compose)
 ├── README.md                         # This file
+├── ROADMAP.md                        # Gap analysis: README pitch vs. what's built, prioritized
 ├── Phase1.md                         # Phase 1 build notes (proof-core)
 ├── Observability.md                  # proof-service + Prometheus/Grafana build notes
 ├── Instructions.md                   # How to see proof-core work end to end
@@ -343,9 +380,9 @@ the one-time `docker run` / table / publication / slot setup.
 ## Project Status
 
 **v0.1.0** — Core proof generation, a live data-source connector, a running service with
-observability, and tamper-evident anchoring, all verified end-to-end against a real database.
-Anchoring today is a local hash-chained log, not yet a public/permissioned chain — see
-`proof-anchor`'s design below for why that's the deliberate first step.
+observability, and tamper-evident anchoring — including a genuinely chain-backed anchor — all
+verified end-to-end against a real database and a real EVM chain (local Anvil node; deployable
+as-is to Base Sepolia or any other EVM-compatible network).
 
 - [x] Cargo workspace scaffolded
 - [x] Core proof generation engine (`proof-core`): algorithm-agnostic hashing (BLAKE3/SHA-256),
@@ -359,10 +396,12 @@ Anchoring today is a local hash-chained log, not yet a public/permissioned chain
       serving a live-activity UI (server-rendered HTML + htmx/SSE) and Prometheus `/metrics`
 - [x] Observability: Prometheus + Grafana via `docker-compose`, with the dashboard provisioned as
       code (`observability/grafana/dashboards/proof-service.json`) — no manual dashboard clicking
-- [x] Anchoring (`proof-anchor`): chain-agnostic `ProofAnchor` trait + `LocalLogAnchor`, a hash-chained
-      append-only local log giving genuine tamper-evidence without a network/consensus dependency —
-      proves out the anchoring boundary before committing to any specific chain's SDK/wallet/fees
-- [ ] Chain-backed anchor implementation (testnet)
+- [x] Anchoring (`proof-anchor`): chain-agnostic `ProofAnchor` trait with two implementations —
+      `LocalLogAnchor` (hash-chained append-only local file, no network dependency) and `EvmAnchor`
+      (a minimal deployed smart contract on any EVM-compatible chain, only ever committing a proof's
+      32-byte digest on-chain, never raw proof/record data) — both verified end-to-end, `EvmAnchor`
+      against a real local Anvil node and `proof-service`'s full pipeline
+- [x] Chain-backed anchor implementation (testnet-ready): `EvmAnchor` + `solidity/src/ProofAnchor.sol`
 - [ ] Verification API
 - [ ] SDK (Rust crate) / CLI tooling
 - [ ] Compliance dashboard

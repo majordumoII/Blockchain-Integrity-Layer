@@ -12,7 +12,9 @@
 #![warn(missing_docs)]
 
 mod anchor;
+mod evm;
 mod local_log;
 
 pub use anchor::{AnchorError, AnchorReceipt, ProofAnchor};
+pub use evm::EvmAnchor;
 pub use local_log::LocalLogAnchor;

@@ -198,7 +198,7 @@ impl ProofAnchor for LocalLogAnchor {
         })
     }
 
-    async fn verify(&self, receipt: &AnchorReceipt) -> Result<Proof, AnchorError> {
+    async fn verify(&self, receipt: &AnchorReceipt, proof: &Proof) -> Result<(), AnchorError> {
         if receipt.ledger_id != self.ledger_id {
             return Err(AnchorError::WrongLedger {
                 receipt_ledger: receipt.ledger_id.clone(),
@@ -217,7 +217,15 @@ impl ProofAnchor for LocalLogAnchor {
             .await
             .map_err(|e| AnchorError::Storage(format!("verify task panicked: {e}")))??;
 
-        Proof::from_canonical_bytes(&entry.proof_bytes).map_err(AnchorError::Serialization)
+        let anchored =
+            Proof::from_canonical_bytes(&entry.proof_bytes).map_err(AnchorError::Serialization)?;
+        if anchored.digest() != proof.digest() {
+            return Err(AnchorError::IntegrityViolation {
+                position: index,
+                reason: "supplied proof's digest does not match the anchored entry".to_string(),
+            });
+        }
+        Ok(())
     }
 }
 
@@ -286,8 +294,7 @@ mod tests {
         let receipt = anchor.anchor(&proof).await.unwrap();
         assert_eq!(receipt.position_hex, "0000000000000000");
 
-        let verified = anchor.verify(&receipt).await.unwrap();
-        assert_eq!(verified.digest(), proof.digest());
+        anchor.verify(&receipt, &proof).await.unwrap();
     }
 
     #[tokio::test]
@@ -303,10 +310,8 @@ mod tests {
         assert_eq!(receipt_a.position_hex, "0000000000000000");
         assert_eq!(receipt_b.position_hex, "0000000000000001");
 
-        let verified_a = anchor.verify(&receipt_a).await.unwrap();
-        let verified_b = anchor.verify(&receipt_b).await.unwrap();
-        assert_eq!(verified_a.digest(), proof_a.digest());
-        assert_eq!(verified_b.digest(), proof_b.digest());
+        anchor.verify(&receipt_a, &proof_a).await.unwrap();
+        anchor.verify(&receipt_b, &proof_b).await.unwrap();
     }
 
     #[tokio::test]
@@ -337,7 +342,7 @@ mod tests {
         // Verifying the *second* entry requires re-checking the chain
         // from the start, so tampering with the first entry must be
         // caught even though we're asking about the second.
-        let result = anchor.verify(&receipt_b).await;
+        let result = anchor.verify(&receipt_b, &proof_b).await;
         assert!(matches!(
             result,
             Err(AnchorError::IntegrityViolation { .. })
@@ -352,7 +357,7 @@ mod tests {
         let mut receipt = anchor.anchor(&proof).await.unwrap();
         receipt.ledger_id = "local-log:/somewhere/else".to_string();
 
-        let result = anchor.verify(&receipt).await;
+        let result = anchor.verify(&receipt, &proof).await;
         assert!(matches!(result, Err(AnchorError::WrongLedger { .. })));
     }
 
@@ -367,7 +372,7 @@ mod tests {
             ledger_id: anchor.ledger_id().to_string(),
             position_hex: "0000000000000099".to_string(),
         };
-        let result = anchor.verify(&bogus_receipt).await;
+        let result = anchor.verify(&bogus_receipt, &proof).await;
         assert!(matches!(result, Err(AnchorError::NotFound)));
     }
 
@@ -381,17 +386,18 @@ mod tests {
             let anchor = Arc::clone(&anchor);
             handles.push(tokio::spawn(async move {
                 let proof = sample_proof(&format!("record-{i}"));
-                anchor.anchor(&proof).await.unwrap()
+                let receipt = anchor.anchor(&proof).await.unwrap();
+                (proof, receipt)
             }));
         }
-        let mut receipts = Vec::new();
+        let mut pairs = Vec::new();
         for handle in handles {
-            receipts.push(handle.await.unwrap());
+            pairs.push(handle.await.unwrap());
         }
 
         // Every receipt must occupy a distinct position — concurrent
         // writers racing on the same "next index" would violate this.
-        let mut positions: Vec<&str> = receipts.iter().map(|r| r.position_hex.as_str()).collect();
+        let mut positions: Vec<&str> = pairs.iter().map(|(_, r)| r.position_hex.as_str()).collect();
         positions.sort_unstable();
         positions.dedup();
         assert_eq!(
@@ -401,8 +407,8 @@ mod tests {
         );
 
         // And the whole chain must still verify from genesis.
-        for receipt in &receipts {
-            assert!(anchor.verify(receipt).await.is_ok());
+        for (proof, receipt) in &pairs {
+            assert!(anchor.verify(receipt, proof).await.is_ok());
         }
     }
 }
