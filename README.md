@@ -314,8 +314,6 @@ the one-time `docker run` / table / publication / slot setup.
 │   ├── proof-connectors/             # RecordSource / ProofSink traits (industry-agnostic)
 │   └── connector-postgres/           # RecordSource impl: Postgres logical replication (CDC)
 ├── README.md                         # This file
-├── README.original.md                # Earlier brainstorm draft, kept for reference
-├── CLAUDE.md                         # Guidance for AI coding agents working in this repo
 ├── Phase1.md                         # Phase 1 build notes (proof-core)
 ├── Instructions.md                   # How to see proof-core work end to end
 └── .gitignore                        # VCS ignore rules
