@@ -63,6 +63,37 @@ Both phases were verified against real, disposable infrastructure — not just "
    value a panel would render.
 5. Tore down all test containers/processes afterward — none of this is meant to run persistently.
 
+## Troubleshooting: default ports already in use
+
+`proof-service` defaults to `127.0.0.1:8080` (web UI) and `127.0.0.1:9090` (Prometheus metrics).
+Nothing about these is special — they're just `clap` defaults — so on a machine that already has
+something bound to 8080/9090/9091 (an unrelated SSH tunnel, another local service, a previous
+`observability/` Grafana stack, etc.) the service will fail to bind, or — more confusingly — you'll
+hit an *unrelated* service on that port and get a response that isn't from `proof-service` at all
+(e.g. a stray `{"detail":"Not Found"}` is FastAPI/uvicorn's 404 body, not axum's — a clear tell you're
+not actually talking to this project).
+
+Check what's listening before assuming the service itself is broken:
+
+```bash
+lsof -nP -iTCP:8080 -sTCP:LISTEN
+lsof -nP -iTCP:9090 -sTCP:LISTEN
+```
+
+If either is occupied, override the listen addresses via env vars (or the equivalent `--web-addr` /
+`--metrics-addr` flags) rather than fighting the conflict:
+
+```bash
+BIL_WEB_ADDR=127.0.0.1:8090 BIL_METRICS_ADDR=127.0.0.1:9190 \
+  BIL_PG_HOST=localhost BIL_PG_PORT=5433 BIL_PG_USER=postgres BIL_PG_PASSWORD=testpass \
+  BIL_PG_DBNAME=bil_test BIL_PG_SLOT=bil_slot BIL_PG_PUBLICATION=bil_pub \
+  cargo run -p proof-service
+```
+
+To leave it running in the background instead of blocking the current shell (e.g. to browse to it
+afterward, rather than the disposable start-verify-teardown pattern used elsewhere in this doc), use
+`nohup ... & disown` so it survives the shell session ending.
+
 ## Next Steps (not yet started)
 
 - **Blockchain anchoring** — a chain-agnostic interface a `Proof` gets submitted to, plus a first
