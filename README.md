@@ -409,7 +409,9 @@ as-is to Base Sepolia or any other EVM-compatible network).
       (`proof-api-types` holds the shared wire types both sides depend on) — CLI tooling and
       non-Rust language bindings remain open
 - [ ] Compliance dashboard
-- [ ] Additional connectors (webhook/event ingest, file/object storage)
+- [x] Additional connector: `connector-gcs` (Google Cloud Storage via Pub/Sub `OBJECT_FINALIZE`
+      notifications, streaming-hashed via `proof-core`'s incremental hash API) — verified against
+      real GCP infrastructure. S3/Azure Blob equivalents and webhook/event ingest remain open.
 
 
 <img width="979" height="499" alt="image" src="https://github.com/user-attachments/assets/454be779-3192-46b8-9128-ec734655e295" />

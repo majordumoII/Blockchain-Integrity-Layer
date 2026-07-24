@@ -16,12 +16,11 @@ an assumption the trait silently baked in.
 
 ## Short answer
 
-**Object/blob storage is the closest to viable today — its one real gap (streaming hashing for large
-objects) is now closed in `proof-core`, leaving only the connector itself (the event-notification
-wiring) to build. Databases-beyond-Postgres are architecturally fine but each vendor is roughly its
-own `connector-postgres`-sized effort — there is no shortcut across vendors. File systems are the
+**Object/blob storage is now a real, live-verified `RecordSource` target — `connector-gcs` closes
+this out end-to-end.** Databases-beyond-Postgres are architecturally fine but each vendor is roughly
+its own `connector-postgres`-sized effort — there is no shortcut across vendors. File systems are the
 weakest fit: the trait assumes a durable "this change is committed, and I can acknowledge past it"
-primitive that a plain filesystem does not provide.**
+primitive that a plain filesystem does not provide.
 
 ## 1. Databases (beyond Postgres)
 
@@ -57,7 +56,10 @@ accordingly: this is N separate substantial efforts, not one connector-abstracti
 
 ## 2. Object / blob cloud storage (S3, GCS, Azure Blob)
 
-**Verdict: best near-term fit of the three. One concrete, currently-real gap: large-object hashing.**
+**Verdict: DONE for GCS.** `connector-gcs` is a real, built, unit-tested, and live-verified
+`RecordSource` (see the "Status: DONE" subsection below) — this was the best near-term fit of the
+three, and it's now closed rather than just analyzed. S3/Azure equivalents would follow the same
+shape but haven't been built.
 
 ### Why this fits well
 
@@ -119,8 +121,36 @@ GCS's `crc32c`/`md5Hash`). It's tempting to just anchor the provider's hash dire
 re-hashing — but that would mean trusting the cloud provider's own computation instead of
 independently re-deriving it, which is a real trust-model downgrade from what `proof-core::hash`
 does everywhere else (`verify()` always re-hashes and compares, never trusts a stored value at face
-value). Streaming re-hash, not "trust the provider's ETag," is the approach consistent with the rest
-of this codebase.
+value). Streaming re-hash, not "trust the provider's ETag," is the approach `connector-gcs` actually
+takes, consistent with the rest of this codebase.
+
+### Status: DONE — `connector-gcs`
+
+Built as a full `RecordSource` on `google-cloud-pubsub`/`google-cloud-storage` (Google's own
+first-party maintained Rust SDKs — no hand-rolled protocol work needed here, unlike
+`connector-postgres`). Watches `OBJECT_FINALIZE` Pub/Sub notifications (GCS's own "fully and
+durably written" signal), streams the object's bytes through `proof_core::hash::Hasher` without
+buffering the whole object, and builds a canonical `ObjectChange` record (bucket/name/generation +
+content digest — mirroring `RowChange`'s "canonical struct, not raw bytes, but still independently
+re-derivable" shape) for `proof-service`'s pipeline to hash and sign.
+
+**A real design decision surfaced during this build, resolved deliberately rather than by default:**
+Pub/Sub's plain `ack()` is fire-and-forget with no confirmation at all; only a subscription
+configured for **exactly-once delivery** gives a `confirmed_ack()` with a real awaitable
+success/failure result. `GcsSource` requires exactly-once and fails loudly if the subscription isn't
+configured for it, rather than silently accepting the weaker at-least-once guarantee — matching
+`connector-postgres`'s `LsnAckToken`'s bar rather than quietly shipping a weaker one for this
+connector alone. (Considered and rejected: the per-message exactly-once ack round-trip adds tens of
+milliseconds — negligible next to the pipeline's dominant cost, on-chain anchor confirmation, which
+measured ~21.7s median in this project's own `EvmAnchor` testing.)
+
+**Verified against real GCP infrastructure**, not just unit tests: a real bucket
+(`corporate-raw-docs`), a dedicated Pub/Sub topic + exactly-once subscription created specifically
+for this connector (alongside, not replacing, that bucket's pre-existing notification for an
+unrelated pipeline), and a real `gsutil cp` upload that triggered a genuine `OBJECT_FINALIZE` event —
+received, downloaded, hashed, and acknowledged, with the ack's durability confirmed independently
+(`gcloud pubsub subscriptions pull --auto-ack` returned zero messages afterward, proving the
+exactly-once ack genuinely took effect on the server, not just returned success locally).
 
 ## 3. File systems
 
@@ -180,17 +210,17 @@ another connector to write."
 
 ## Bottom Line
 
-| Target | Trait-level fit | Concrete gap | Size of gap |
-|---|---|---|---|
-| Databases (new vendors) | ✅ Sound | None in the trait itself | Large but well-understood — each vendor is its own protocol-level effort, no shortcut |
-| Object/blob storage | ✅ Sound | ~~Streaming/chunked hashing in `proof-core`~~ **closed** — only the connector (event-notification wiring) is left to build | Small — one connector, no protocol to hand-roll |
-| File systems | ❌ Weak | No durable commit/cursor signal to ack against; partial-write visibility is a correctness risk, not just a performance one | Requires a real design decision, not an implementation task |
+| Target | Trait-level fit | Status |
+|---|---|---|
+| Databases (new vendors) | ✅ Sound | Not started — each vendor (MySQL binlog, SQL Server CDC/CT, Oracle LogMiner, Snowflake Streams) is its own protocol-level effort, no shortcut |
+| Object/blob storage (GCS) | ✅ Sound | **DONE** — `connector-gcs` built, unit-tested, and live-verified against real GCP infrastructure (see above) |
+| Object/blob storage (S3, Azure) | ✅ Sound (by analogy to GCS) | Not started — same shape as `connector-gcs` (event notification → `RecordSource`, streaming hash via the same `proof-core` API), but not built |
+| File systems | ❌ Weak | Not started, and shouldn't be queued as "just another connector" — no durable commit/cursor signal to ack against; partial-write visibility is a correctness risk, not just a performance one; needs a real design decision first |
 
-If the near-term goal is "prove this product works for a third data-source class beyond Postgres,"
-**object/blob storage is the right next target**: `proof-core::hash` now exposes `HashAlgorithm::hasher()`
-(incremental) and `hash_reader()` (a `Read`-based convenience) alongside the original one-shot
-`hash()`, closing the one real gap this class of source had. What's left is building the actual
-connector — wiring S3/GCS/Azure event notifications into a `RecordSource` impl — which should be
-genuinely simpler to build and verify than `connector-postgres` was (no wire protocol to hand-roll —
-a well-documented, mature-client-library pub/sub mechanism instead). File systems should be treated
-as a deferred, explicitly-scoped design decision, not queued up as "just another connector."
+The third-data-source-class goal from this doc's original framing is met: `connector-gcs` proves the
+`RecordSource`/`proof-core` design genuinely extends beyond Postgres, with real GCP infrastructure
+(not a local emulator) as the verification bar. The natural next steps, in likely order of value: an
+S3 (via SQS) or Azure Blob (via Event Grid) connector following the same pattern now that it's
+proven once; or picking up a second database vendor if broader CDC coverage matters more than a
+second cloud-storage provider. File systems remain the one target that needs a scoping conversation,
+not an implementation task, before any code should be written.
