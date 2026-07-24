@@ -123,9 +123,9 @@ anvil    # leave running in its own terminal; prints funded dev accounts + priva
 cd solidity && forge build && cd ..   # only needed after editing ProofAnchor.sol — the build
                                         # artifact is already checked in
 
-BIL_EVM_RPC_URL=http://localhost:8545 \
-BIL_EVM_DEPLOYER_PRIVATE_KEY=<paste Anvil's printed Private Key [0]> \
-cargo run -p proof-anchor --example deploy_evm_anchor
+# Copy Anvil's first printed "Private Key" line into this variable, then run:
+export BIL_EVM_DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+BIL_EVM_RPC_URL=http://localhost:8545 cargo run -p proof-anchor --example deploy_evm_anchor
 ```
 
 This prints a deployed contract address. Then run the crate's own test suite, which spins up a
