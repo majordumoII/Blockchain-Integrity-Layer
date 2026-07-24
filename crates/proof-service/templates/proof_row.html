@@ -3,5 +3,5 @@
   <span class="badge">{{ table }}</span>
   <span class="badge">{{ change_kind }}</span>
   <span class="meta">position {{ source_position }} · {{ attestation_count }} signature(s) · {{ timestamp }}</span>
-  <div class="digest">{{ digest_hex }}</div>
+  <div class="digest"><a href="/compliance/{{ digest_hex }}">{{ digest_hex }}</a></div>
 </div>

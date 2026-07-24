@@ -24,7 +24,10 @@ use super::AppState;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
+use proof_anchor::{AnchorReceipt, ProofAnchor};
 use proof_api_types::{ErrorResponse, ProofRecordResponse, VerifyRequest, VerifyResponse};
+use proof_core::Proof;
+use std::sync::Arc;
 
 /// `GET /api/v1/proofs/{digest}` — `digest` is the lowercase-hex digest as
 /// rendered by [`proof_core::hash::Digest::to_hex`] (the same string shown
@@ -83,29 +86,40 @@ pub async fn verify_proof(
     State(state): State<AppState>,
     Json(req): Json<VerifyRequest>,
 ) -> Response {
-    let digest_hex = req.proof.digest().to_hex();
+    Json(verify(&state.anchor, &req.proof, &req.receipt).await).into_response()
+}
 
-    if let Err(e) = req.proof.verify_attestations() {
-        return Json(VerifyResponse {
+/// Independently re-verifies `proof` against `receipt`: signatures via
+/// [`Proof::verify_attestations`], then anchor state via
+/// [`ProofAnchor::verify`]. Shared by [`verify_proof`] (the JSON API) and
+/// `super::compliance::compliance_verify` (the dashboard's clickable
+/// "Verify" button) so there is exactly one place that decides what
+/// "valid" means for this service, not two copies that could drift.
+pub(super) async fn verify(
+    anchor: &Arc<dyn ProofAnchor>,
+    proof: &Proof,
+    receipt: &AnchorReceipt,
+) -> VerifyResponse {
+    let digest_hex = proof.digest().to_hex();
+
+    if let Err(e) = proof.verify_attestations() {
+        return VerifyResponse {
             valid: false,
             digest_hex,
             reason: Some(format!("attestation verification failed: {e}")),
-        })
-        .into_response();
+        };
     }
 
-    match state.anchor.verify(&req.receipt, &req.proof).await {
-        Ok(()) => Json(VerifyResponse {
+    match anchor.verify(receipt, proof).await {
+        Ok(()) => VerifyResponse {
             valid: true,
             digest_hex,
             reason: None,
-        })
-        .into_response(),
-        Err(e) => Json(VerifyResponse {
+        },
+        Err(e) => VerifyResponse {
             valid: false,
             digest_hex,
             reason: Some(format!("anchor verification failed: {e}")),
-        })
-        .into_response(),
+        },
     }
 }

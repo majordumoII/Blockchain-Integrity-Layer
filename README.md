@@ -408,7 +408,10 @@ as-is to Base Sepolia or any other EVM-compatible network).
 - [x] SDK (Rust crate): `bil-client`, a typed HTTP client over the verification API
       (`proof-api-types` holds the shared wire types both sides depend on) — CLI tooling and
       non-Rust language bindings remain open
-- [ ] Compliance dashboard
+- [x] Compliance dashboard: `GET /compliance` (aggregate per-source coverage, read live from
+      Prometheus counters) and `GET /compliance/{digest}` (per-record audit trail with a one-click
+      "Verify now" that re-runs the real signature + on-chain anchor check) — RBAC/revocation/N-of-M
+      policy remain open, per ROADMAP.md
 - [x] Additional connector: `connector-gcs` (Google Cloud Storage via Pub/Sub `OBJECT_FINALIZE`
       notifications, streaming-hashed via `proof-core`'s incremental hash API) — verified against
       real GCP infrastructure. S3/Azure Blob equivalents and webhook/event ingest remain open.

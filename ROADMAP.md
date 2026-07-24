@@ -32,7 +32,8 @@ claim" (vs. "this row is unchanged") is the remaining large piece not yet built.
 | "Prove a *specific claim*" (e.g. "customer is over 18", "temp stayed below 8°C") | ❌ **Not built at all** | This is arguably the actual product per the README's "Proof Cloud" differentiator ("define rules, generate proofs"). Today the system proves "this exact row existed and hasn't changed" — a data-integrity proof, not a selective-disclosure/predicate proof. There's no rule engine, no way to prove "age > 18" without revealing the birthdate. |
 | "Verification API" (REST/gRPC for third parties to check a proof) | ✅ **True today (v1, REST/JSON — no gRPC)** | `proof-service`'s `web/api.rs`: `GET /api/v1/proofs/{digest}` looks up a proof + its `AnchorReceipt` this service produced; `POST /api/v1/verify` independently re-verifies any caller-supplied `Proof`+`AnchorReceipt` JSON pair (signatures + on-chain anchor state), with no requirement that this service has ever seen that proof before. Verified end-to-end against the real `EvmAnchor`/local-Anvil setup above: looked up a real proof by digest, round-tripped it through `/verify` (accepted), then confirmed a tampered digest and a mismatched receipt are both correctly rejected with distinct reasons. |
 | "SDK" for other services to integrate in minutes | 🟡 **Partially true (verification side only; Rust only)** | `bil-client` is a typed HTTP client over the verification API — a counterparty adds one crate, points a `Client` at a `proof-service` URL, and calls `get_proof`/`verify` in a couple of lines, no hand-rolled JSON. `proof-api-types` holds the request/response structs both `proof-service` and `bil-client` depend on, so they cannot silently drift apart. What's still missing: no producer-side SDK (a service wanting to *start proving its own data* still has to wire `proof-core`/`proof-connectors` itself, no `integrity.commit(record)?`-style wrapper exists yet), no non-Rust bindings, no versioned release. |
-| Multi-party approvals, revocation, RBAC, compliance dashboards | ❌ **Not built** | Listed as "Technical Features" in the README; none exist. Multi-party attestation *does* exist in `proof-core` (N signers can attest one proof) but N-of-M threshold policy, revocation, and RBAC are explicitly deferred to "a higher layer" per the code's own docs. |
+| Compliance dashboards | ✅ **True today (v1)** | `proof-service`'s `web/compliance.rs`: `GET /compliance` shows live per-source coverage (observed/proved/failed/coverage%) read straight from this process's own Prometheus counters (the same numbers Grafana scrapes — no second bookkeeping mechanism that could drift); `GET /compliance/{digest}` is a per-record audit trail (source, signer count, timestamp, anchor ledger/position) with a one-click "Verify now" button that calls the exact same signature+anchor re-verification `POST /api/v1/verify` uses, rendered as HTML instead of JSON. Verified against the real Postgres CDC + `EvmAnchor`/local-Anvil pipeline: inserted real rows, confirmed the aggregate view's counts matched, clicked through to a real record, and confirmed both the valid-proof and unknown-digest paths render and verify correctly. |
+| Multi-party approvals, revocation, RBAC | ❌ **Not built** | Listed as "Technical Features" in the README; none exist. Multi-party attestation *does* exist in `proof-core` (N signers can attest one proof) but N-of-M threshold policy, revocation, and RBAC are explicitly deferred to "a higher layer" per the code's own docs. |
 | Prometheus/Grafana observability | ✅ **True today, and beyond what the README even asked for** | Fully built and verified — this wasn't in the original pitch at all, it's operational maturity added during the build |
 
 ## The Honest Gap-to-Bridge, in Priority Order
@@ -97,9 +98,10 @@ own data* still has to wire `proof-core`+`proof-connectors` itself; a producer-s
 README's `integrity.commit(record)?` ergonomic) is a separate, not-yet-built piece; (b) Rust only, no
 FFI/non-Rust bindings; (c) no versioned release (crates.io publish, semver policy) yet.
 
-**5. Everything else** (RBAC, revocation, N-of-M policy enforcement, compliance dashboards) is real
-but secondary — these are hardening/enterprise-readiness features that matter for a paying
-customer, not for proving the core concept works.
+**5. ~~Compliance dashboards~~ RESOLVED (v1).** Built as real `proof-service` routes over data the
+system already produces — see the updated table row above. What's left in this bucket (RBAC,
+revocation, N-of-M policy enforcement) is real but secondary — hardening/enterprise-readiness
+features that matter for a paying customer, not for proving the core concept works.
 
 ## Bottom Line
 
@@ -111,5 +113,6 @@ other big piece that would make the pitch's headline examples fully true: **a pr
 layer** that can prove "over 18" without revealing the birthdate. Until that exists, the honest
 characterization is "tamper-evident, chain-anchored audit trail infrastructure," not yet "prove a
 claim without revealing the data" — which is a real and valuable thing, just a narrower claim than
-the README makes. The remaining gaps (verification API, packaged SDK, RBAC/revocation/compliance
-dashboards) are real but smaller lifts once the claim layer exists.
+the README makes. Verification API, a verification-side SDK, and compliance dashboards are all now
+built; the remaining gaps (a producer-side SDK, RBAC/revocation/N-of-M policy enforcement) are real
+but smaller lifts once the claim layer exists.

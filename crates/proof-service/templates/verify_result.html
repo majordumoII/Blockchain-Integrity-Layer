@@ -1,0 +1,7 @@
+{% if valid %}
+<div style="color: #2e9e5b;">✓ Verified — signatures and anchor both check out for {{ digest_hex }}.</div>
+{% else %}
+<div style="color: #c0392b;">
+  ✗ Verification failed for {{ digest_hex }}{% if let Some(reason) = reason %}: {{ reason }}{% endif %}
+</div>
+{% endif %}

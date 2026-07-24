@@ -50,9 +50,17 @@ async fn spawn_test_service() -> (String, tempfile::TempDir) {
     .await
     .expect("submit to sink");
 
+    // Not installed globally (this test doesn't need a real /metrics
+    // listener) — just enough of a handle to satisfy AppState, since the
+    // compliance dashboard's aggregate view isn't what this test exercises.
+    let metrics_handle = metrics_exporter_prometheus::PrometheusBuilder::new()
+        .build_recorder()
+        .handle();
+
     let app = proof_service::web::router(proof_service::web::AppState {
         sink,
         anchor: anchor_dyn,
+        metrics_handle,
     });
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")

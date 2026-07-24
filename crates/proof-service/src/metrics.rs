@@ -6,22 +6,27 @@
 //! global counter.
 
 use metrics::{counter, histogram};
+use metrics_exporter_prometheus::PrometheusHandle;
 use proof_connectors::SourceId;
 use std::time::Instant;
 
 /// Installs the Prometheus recorder and starts serving `/metrics` on
-/// `addr`. Must be called once, before any of the `record_*` functions in
-/// this module are used.
+/// `addr`, returning a [`PrometheusHandle`] the caller can use to render
+/// current metric values in-process (e.g. for the compliance dashboard's
+/// aggregate coverage view) without a second HTTP round trip to
+/// `/metrics`. Must be called once, before any of the `record_*`
+/// functions in this module are used.
 ///
 /// # Panics
 ///
 /// Panics if a metrics recorder has already been installed globally, or
 /// if binding the metrics HTTP listener fails.
-pub fn install(addr: std::net::SocketAddr) {
+#[must_use]
+pub fn install(addr: std::net::SocketAddr) -> PrometheusHandle {
     metrics_exporter_prometheus::PrometheusBuilder::new()
         .with_http_listener(addr)
-        .install()
-        .expect("failed to install Prometheus recorder/listener");
+        .install_recorder()
+        .expect("failed to install Prometheus recorder/listener")
 }
 
 /// Records that a record was observed from a source, before any

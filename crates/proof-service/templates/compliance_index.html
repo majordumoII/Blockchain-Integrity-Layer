@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compliance Dashboard — Blockchain Integrity Layer</title>
+  <script src="/static/htmx.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+    header { margin-bottom: 1.5rem; }
+    h1 { font-size: 1.25rem; margin-bottom: 0.25rem; }
+    .subtitle { opacity: 0.7; font-size: 0.9rem; }
+    nav { margin-bottom: 1rem; font-size: 0.85rem; }
+    nav a { margin-right: 1rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+    }
+    th { opacity: 0.7; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+    .coverage-bar {
+      display: inline-block;
+      width: 100px;
+      height: 0.6rem;
+      background: color-mix(in srgb, currentColor 12%, transparent);
+      border-radius: 3px;
+      overflow: hidden;
+      vertical-align: middle;
+      margin-right: 0.5rem;
+    }
+    .coverage-fill {
+      height: 100%;
+      background: #2e9e5b;
+    }
+    .empty { opacity: 0.6; padding: 1rem 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Compliance Dashboard</h1>
+    <div class="subtitle">Per-source coverage — read live from this process's own Prometheus counters, the same numbers Grafana scrapes.</div>
+  </header>
+
+  <nav>
+    <a href="/">&larr; Live proof feed</a>
+  </nav>
+
+  {% if sources.is_empty() %}
+    <div class="empty">No sources have observed any records yet.</div>
+  {% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Observed</th>
+        <th>Proved &amp; anchored</th>
+        <th>Failed</th>
+        <th>Coverage</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in sources %}
+      <tr>
+        <td>{{ row.source_id }}</td>
+        <td>{{ row.observed }}</td>
+        <td>{{ row.proved }}</td>
+        <td>{{ row.failed }}</td>
+        <td>
+          <span class="coverage-bar"><span class="coverage-fill" style="width: {{ row.coverage_percent }}%"></span></span>
+          {{ row.coverage_percent }}%
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</body>
+</html>

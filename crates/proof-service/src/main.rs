@@ -116,7 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
     let args = Args::parse();
 
-    proof_service::metrics::install(args.metrics_addr);
+    let metrics_handle = proof_service::metrics::install(args.metrics_addr);
     info!(addr = %args.metrics_addr, "Prometheus metrics listening");
 
     // Generated fresh at startup: this stage of the project has no key
@@ -203,6 +203,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = proof_service::web::router(proof_service::web::AppState {
         sink,
         anchor: anchor_dyn,
+        metrics_handle,
     });
     info!(addr = %args.web_addr, "web UI listening");
     let listener = tokio::net::TcpListener::bind(args.web_addr).await?;
