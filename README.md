@@ -405,7 +405,9 @@ as-is to Base Sepolia or any other EVM-compatible network).
 - [x] Verification API (v1): `GET /api/v1/proofs/{digest}` and `POST /api/v1/verify` on
       `proof-service`, the first externally-consumable way to check a proof without running Rust
       against this repo
-- [ ] SDK (Rust crate) / CLI tooling
+- [x] SDK (Rust crate): `bil-client`, a typed HTTP client over the verification API
+      (`proof-api-types` holds the shared wire types both sides depend on) — CLI tooling and
+      non-Rust language bindings remain open
 - [ ] Compliance dashboard
 - [ ] Additional connectors (webhook/event ingest, file/object storage)
 

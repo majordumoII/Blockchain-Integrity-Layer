@@ -1,0 +1,23 @@
+[package]
+name = "bil-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Typed HTTP client SDK for proof-service's JSON verification API"
+
+[dependencies]
+proof-api-types = { path = "../proof-api-types" }
+proof-core = { path = "../proof-core" }
+proof-anchor = { path = "../proof-anchor" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+axum = { version = "0.8" }
+proof-service = { path = "../proof-service" }
+proof-connectors = { path = "../proof-connectors" }
+rand_core.workspace = true
+tempfile = "3"

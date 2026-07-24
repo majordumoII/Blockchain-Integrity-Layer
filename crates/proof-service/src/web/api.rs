@@ -14,22 +14,17 @@
 //!   exactly like `ProofAnchor::verify()`'s own contract, no different
 //!   whether the caller got them from this API's first endpoint or from
 //!   anywhere else entirely.
+//!
+//! Request/response shapes live in `proof-api-types`, not here, so
+//! `bil-client` (and any other client) depends on the exact same struct
+//! definitions this handler serializes, rather than hand-rolled types
+//! that can silently drift out of sync with this endpoint.
 
 use super::AppState;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
-use proof_anchor::AnchorReceipt;
-use proof_core::Proof;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize)]
-pub struct ProofRecordResponse {
-    source_id: String,
-    source_position: String,
-    proof: Proof,
-    receipt: AnchorReceipt,
-}
+use proof_api_types::{ErrorResponse, ProofRecordResponse, VerifyRequest, VerifyResponse};
 
 /// `GET /api/v1/proofs/{digest}` — `digest` is the lowercase-hex digest as
 /// rendered by [`proof_core::hash::Digest::to_hex`] (the same string shown
@@ -66,28 +61,6 @@ pub async fn get_proof_by_digest(
         receipt: record.receipt,
     })
     .into_response()
-}
-
-#[derive(Debug, Deserialize)]
-pub struct VerifyRequest {
-    proof: Proof,
-    receipt: AnchorReceipt,
-}
-
-#[derive(Debug, Serialize)]
-pub struct VerifyResponse {
-    valid: bool,
-    digest_hex: String,
-    /// `None` when `valid` is `true`; otherwise a human-readable reason,
-    /// covering both "signatures don't check out" and "anchor doesn't
-    /// match" failure modes under one field so callers don't need to
-    /// branch on which stage failed to just show a user why.
-    reason: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorResponse {
-    error: String,
 }
 
 /// `POST /api/v1/verify` — re-verifies a caller-supplied `Proof` against

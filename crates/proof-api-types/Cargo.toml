@@ -1,0 +1,12 @@
+[package]
+name = "proof-api-types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Wire types for proof-service's JSON verification API, shared between the service and its clients"
+
+[dependencies]
+proof-core = { path = "../proof-core" }
+proof-anchor = { path = "../proof-anchor" }
+serde.workspace = true

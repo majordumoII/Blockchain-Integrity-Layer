@@ -31,7 +31,7 @@ claim" (vs. "this row is unchanged") is the remaining large piece not yet built.
 | "Zero data migration... add integrity on top of existing databases" | ✅ **True today** | `connector-postgres` is genuinely zero-touch — no schema changes, no app code changes, just CDC |
 | "Prove a *specific claim*" (e.g. "customer is over 18", "temp stayed below 8°C") | ❌ **Not built at all** | This is arguably the actual product per the README's "Proof Cloud" differentiator ("define rules, generate proofs"). Today the system proves "this exact row existed and hasn't changed" — a data-integrity proof, not a selective-disclosure/predicate proof. There's no rule engine, no way to prove "age > 18" without revealing the birthdate. |
 | "Verification API" (REST/gRPC for third parties to check a proof) | ✅ **True today (v1, REST/JSON — no gRPC)** | `proof-service`'s `web/api.rs`: `GET /api/v1/proofs/{digest}` looks up a proof + its `AnchorReceipt` this service produced; `POST /api/v1/verify` independently re-verifies any caller-supplied `Proof`+`AnchorReceipt` JSON pair (signatures + on-chain anchor state), with no requirement that this service has ever seen that proof before. Verified end-to-end against the real `EvmAnchor`/local-Anvil setup above: looked up a real proof by digest, round-tripped it through `/verify` (accepted), then confirmed a tampered digest and a mismatched receipt are both correctly rejected with distinct reasons. |
-| "SDK" for other services to integrate in minutes | ❌ **Not built** | `proof-core` is a Rust crate, not a packaged, documented SDK with a stable public API contract. No language bindings, no versioned release. |
+| "SDK" for other services to integrate in minutes | 🟡 **Partially true (verification side only; Rust only)** | `bil-client` is a typed HTTP client over the verification API — a counterparty adds one crate, points a `Client` at a `proof-service` URL, and calls `get_proof`/`verify` in a couple of lines, no hand-rolled JSON. `proof-api-types` holds the request/response structs both `proof-service` and `bil-client` depend on, so they cannot silently drift apart. What's still missing: no producer-side SDK (a service wanting to *start proving its own data* still has to wire `proof-core`/`proof-connectors` itself, no `integrity.commit(record)?`-style wrapper exists yet), no non-Rust bindings, no versioned release. |
 | Multi-party approvals, revocation, RBAC, compliance dashboards | ❌ **Not built** | Listed as "Technical Features" in the README; none exist. Multi-party attestation *does* exist in `proof-core` (N signers can attest one proof) but N-of-M threshold policy, revocation, and RBAC are explicitly deferred to "a higher layer" per the code's own docs. |
 | Prometheus/Grafana observability | ✅ **True today, and beyond what the README even asked for** | Fully built and verified — this wasn't in the original pitch at all, it's operational maturity added during the build |
 
@@ -85,10 +85,17 @@ no gRPC (REST/JSON only), and lookups are bounded by `InProcessProofSink`'s capp
 if the caller already has the `Proof`+`AnchorReceipt` from elsewhere (e.g. their own records, or a
 block explorer). A durable proof store (see priority 1's still-open items) would close that.
 
-**4. No packaged SDK.** Now that anchoring and verification both exist, wrapping `proof-core` (and
-the new verification API) as a versioned, documented, embeddable SDK (possibly with FFI bindings for
-non-Rust callers, or simply a thin typed HTTP client for the API above) is what makes "integrate in
-minutes" true rather than aspirational. This is the next item to close.
+**4. ~~No packaged SDK.~~ PARTIALLY RESOLVED (verification-side client; producer-side still open).**
+`bil-client` is a thin typed HTTP client crate over the verification API, backed by `proof-api-types`
+(the shared request/response structs both the client and `proof-service` depend on, so they can't
+silently drift apart). Verified against a real `proof-service` router in-process (no Postgres/Anvil
+required — `crates/bil-client/tests/api_live.rs` wires it to a real `LocalLogAnchor` on a temp file)
+and, separately, against the actual running binary with `--anchor-backend evm` on the same local
+Anvil setup verified in priority 1 — fetched a real proof by digest and confirmed it verifies. What's
+still open: (a) this covers the *verification* side only — a service that wants to *start proving its
+own data* still has to wire `proof-core`+`proof-connectors` itself; a producer-side wrapper (the
+README's `integrity.commit(record)?` ergonomic) is a separate, not-yet-built piece; (b) Rust only, no
+FFI/non-Rust bindings; (c) no versioned release (crates.io publish, semver policy) yet.
 
 **5. Everything else** (RBAC, revocation, N-of-M policy enforcement, compliance dashboards) is real
 but secondary — these are hardening/enterprise-readiness features that matter for a paying

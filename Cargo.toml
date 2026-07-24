@@ -6,6 +6,8 @@ members = [
     "crates/connector-postgres",
     "crates/proof-service",
     "crates/proof-anchor",
+    "crates/proof-api-types",
+    "crates/bil-client",
 ]
 
 [workspace.package]

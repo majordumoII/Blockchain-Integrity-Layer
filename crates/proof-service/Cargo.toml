@@ -10,6 +10,7 @@ description = "Single-binary service wiring a connector into proof-core and a Pr
 proof-core = { path = "../proof-core" }
 proof-connectors = { path = "../proof-connectors" }
 proof-anchor = { path = "../proof-anchor" }
+proof-api-types = { path = "../proof-api-types" }
 connector-postgres = { path = "../connector-postgres" }
 axum = { version = "0.8" }
 askama = "0.16"
