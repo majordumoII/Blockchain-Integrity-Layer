@@ -195,12 +195,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(proof_service::pipeline::run(
         source,
         sink_dyn,
-        anchor_dyn,
+        anchor_dyn.clone(),
         signing_key,
         source_id,
     ));
 
-    let app = proof_service::web::router(proof_service::web::AppState { sink });
+    let app = proof_service::web::router(proof_service::web::AppState {
+        sink,
+        anchor: anchor_dyn,
+    });
     info!(addr = %args.web_addr, "web UI listening");
     let listener = tokio::net::TcpListener::bind(args.web_addr).await?;
     axum::serve(listener, app).await?;

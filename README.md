@@ -402,7 +402,9 @@ as-is to Base Sepolia or any other EVM-compatible network).
       32-byte digest on-chain, never raw proof/record data) — both verified end-to-end, `EvmAnchor`
       against a real local Anvil node and `proof-service`'s full pipeline
 - [x] Chain-backed anchor implementation (testnet-ready): `EvmAnchor` + `solidity/src/ProofAnchor.sol`
-- [ ] Verification API
+- [x] Verification API (v1): `GET /api/v1/proofs/{digest}` and `POST /api/v1/verify` on
+      `proof-service`, the first externally-consumable way to check a proof without running Rust
+      against this repo
 - [ ] SDK (Rust crate) / CLI tooling
 - [ ] Compliance dashboard
 - [ ] Additional connectors (webhook/event ingest, file/object storage)

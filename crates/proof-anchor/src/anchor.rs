@@ -6,6 +6,7 @@
 //! product is the SDK/API ergonomics," not any one chain's SDK.
 
 use proof_core::Proof;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// A tamper-evident receipt proving a [`Proof`] was anchored at a
@@ -17,7 +18,7 @@ use std::fmt;
 /// reference to store or display a receipt. Only the anchor
 /// implementation that produced it knows how to interpret it well enough
 /// to verify.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorReceipt {
     /// Identifies which ledger/anchor instance produced this receipt
     /// (e.g. `"local-log:./anchor.log"`), so a receipt is self-describing

@@ -1,10 +1,13 @@
 //! The core loop: pull records from a [`RecordSource`], hash + sign them
-//! via `proof-core`, submit the resulting [`Proof`] to a [`ProofSink`],
-//! anchor it to a tamper-evident ledger, then acknowledge the source — in
-//! that order, so a crash before any of those three steps succeeds leaves
-//! the source able to redeliver the record rather than silently treating
-//! it as durably proved when it isn't yet (see `proof_connectors::AckToken`'s
-//! docs for why ack ordering matters).
+//! via `proof-core`, anchor the resulting [`Proof`] to a tamper-evident
+//! ledger, submit the anchored proof (with its receipt) to a
+//! [`ProofSink`], then acknowledge the source — in that order, so a
+//! crash before any of those three steps succeeds leaves the source able
+//! to redeliver the record rather than silently treating it as durably
+//! proved when it isn't yet (see `proof_connectors::AckToken`'s docs for
+//! why ack ordering matters). Anchoring happens before the sink submit so
+//! every `ProvedRecord` the sink (and anything reading its history, like
+//! a verification API) sees already carries a real `AnchorReceipt`.
 
 use crate::metrics;
 use proof_anchor::ProofAnchor;
@@ -76,21 +79,14 @@ pub async fn run(
             }
         };
 
-        let proved = ProvedRecord {
-            source_id: source_id.clone(),
-            source_position: record.source_position.clone(),
-            proof: proof.clone(),
-        };
-        if let Err(e) = sink.submit(proved).await {
-            error!(source = %source_id, error = %e, "sink rejected proof; record will be redelivered");
-            metrics::record_failed(&source_id, "sink");
-            continue;
-        }
-
         // Anchoring is this project's actual durability guarantee, so it
-        // gates the ack exactly like the sink submit above: a crash
-        // before it succeeds must leave the record redeliverable rather
-        // than silently ending up "acked but never anchored."
+        // gates the ack (and, below, the sink submission): a crash before
+        // it succeeds must leave the record redeliverable rather than
+        // silently ending up "acked but never anchored." Anchoring before
+        // the sink submit (rather than after, as in an earlier version of
+        // this loop) also means the `ProvedRecord` handed to the sink can
+        // carry the real `AnchorReceipt` a verification API can look up,
+        // instead of the sink only ever seeing pre-anchor state.
         let receipt = match anchor.anchor(&proof).await {
             Ok(r) => r,
             Err(e) => {
@@ -100,8 +96,20 @@ pub async fn run(
             }
         };
 
-        // Only acknowledge after the sink has durably accepted the proof
-        // and it has been anchored — this is the ordering `AckToken`'s
+        let proved = ProvedRecord {
+            source_id: source_id.clone(),
+            source_position: record.source_position.clone(),
+            proof: proof.clone(),
+            receipt: receipt.clone(),
+        };
+        if let Err(e) = sink.submit(proved).await {
+            error!(source = %source_id, error = %e, "sink rejected proof; record will be redelivered");
+            metrics::record_failed(&source_id, "sink");
+            continue;
+        }
+
+        // Only acknowledge after the proof has been anchored and the sink
+        // has durably accepted it — this is the ordering `AckToken`'s
         // contract depends on.
         if let Err(e) = ack.ack().await {
             warn!(source = %source_id, error = %e, "failed to acknowledge source; record may be redelivered");

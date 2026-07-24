@@ -8,6 +8,7 @@ description = "Industry-agnostic connector traits (RecordSource, ProofSink) that
 
 [dependencies]
 proof-core = { path = "../proof-core" }
+proof-anchor = { path = "../proof-anchor" }
 async-trait.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
 thiserror.workspace = true

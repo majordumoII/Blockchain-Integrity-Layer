@@ -4,6 +4,7 @@
 //! proofs independently, without knowing about each other.
 
 use crate::source::SourceId;
+use proof_anchor::AnchorReceipt;
 use proof_core::Proof;
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -11,9 +12,10 @@ use tokio::sync::broadcast;
 
 /// A [`Proof`] plus the source-level context needed to label/route it —
 /// which source produced it and what position in that source it came
-/// from. The `Proof` itself stays exactly what `proof-core` defines;
-/// this wrapper only adds routing metadata that lives above `proof-core`
-/// and would be out of place inside it.
+/// from — and the [`AnchorReceipt`] confirming where it was committed.
+/// The `Proof` itself stays exactly what `proof-core` defines; this
+/// wrapper only adds routing/anchoring metadata that lives above
+/// `proof-core` and would be out of place inside it.
 #[derive(Debug, Clone)]
 pub struct ProvedRecord {
     /// Which source produced this proof.
@@ -23,6 +25,11 @@ pub struct ProvedRecord {
     pub source_position: String,
     /// The proof itself.
     pub proof: Proof,
+    /// Where this proof was anchored — present because a `ProvedRecord`
+    /// is only ever submitted once anchoring has already succeeded (see
+    /// `proof-service`'s pipeline ordering), so there is no "not yet
+    /// anchored" state for this type to represent.
+    pub receipt: AnchorReceipt,
 }
 
 /// Where finished proofs go once built.
@@ -138,6 +145,10 @@ mod tests {
             source_id: SourceId::new("test-source"),
             source_position: position.to_string(),
             proof,
+            receipt: AnchorReceipt {
+                ledger_id: "test-ledger".to_string(),
+                position_hex: format!("{position:0>4}"),
+            },
         }
     }
 
