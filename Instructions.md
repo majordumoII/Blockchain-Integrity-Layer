@@ -150,13 +150,17 @@ With `proof-service` running and at least one row proved (Milestones 3 + 5 combi
 Milestone 11's `start.sh` for the one-command version):
 
 ```bash
+# Grab a digest from the live feed (or copy one from the UI/curl output yourself)
+DIGEST=$(curl -s http://localhost:8080/ | grep -oE '/compliance/[0-9a-f]{64}' | head -1 | sed 's#/compliance/##')
+echo "digest: $DIGEST"
+
 # Look up a proof + its real anchor receipt by digest
-curl -s http://localhost:8080/api/v1/proofs/<digest-hex> | jq
+curl -s "http://localhost:8080/api/v1/proofs/$DIGEST" | jq
 
 # Independently re-verify a proof + receipt pair
 curl -s -X POST http://localhost:8080/api/v1/verify \
   -H 'content-type: application/json' \
-  -d @<(curl -s http://localhost:8080/api/v1/proofs/<digest-hex> | jq '{proof, receipt}') | jq
+  -d @<(curl -s "http://localhost:8080/api/v1/proofs/$DIGEST" | jq '{proof, receipt}') | jq
 ```
 
 `{"valid": true, ...}` confirms both the signatures and the on-chain anchor were independently
